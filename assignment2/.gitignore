@@ -1,0 +1,6 @@
+netflix_dataset.pkl
+netflix.pcap
+netflix_only.pcap
+X_test_part2.pkl
+y_test_part2.pkl
+*.joblib
