@@ -1,0 +1,305 @@
+\documentclass{article}
+\usepackage{graphicx} % Required for inserting images
+\usepackage{float}
+
+\title{Security Assignment 3: Internet Privacy}
+\author{Chris Low}
+
+\begin{document}
+
+\maketitle
+
+\section{Methodology (unencrypted DNS)}
+
+I ran this experiment on the UChicago WiFi network using a Mac laptop.  
+Before visiting Reddit, I closed other browser tabs and cleared the cache in Chrome so that the page load would look as fresh as possible.
+
+I then started Wireshark on the active interface and set a display filter of
+
+\begin{verbatim}
+dns
+\end{verbatim}
+
+so only DNS packets would be shown. With the capture running, I typed
+\texttt{https://www.reddit.com} in the address bar and waited for the
+front page to finish loading. After the bursts of DNS traffic died down,
+I stopped the capture and saved it as a pcap file that contained only DNS
+packets.
+
+In this trace the client IP is \texttt{10.150.63.208}, and the main DNS
+resolver is \texttt{128.135.249.50}, which belongs to UChicago.  
+There are several dozen DNS queries and responses in total. Screenshots of the packet capture is shown below, but you can also find them in the file \verb|reddit_from_dns.pcap|.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\linewidth]{DNS_capture_P1.png}
+    \label{fig:placeholder}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\linewidth]{DNS_capture_P2.png}
+    \label{fig:placeholder}
+\end{figure}
+
+\section{Who can see that I visited Reddit from unencrypted DNS}
+
+Because these DNS packets are unencrypted, several parties can see the
+domain names in clear text.
+
+\subsection*{Campus DNS resolver and local network}
+
+All DNS queries in the trace go from \texttt{10.150.63.208} (my machine)
+to \texttt{128.135.249.50}. This means the UChicago recursive DNS
+resolver sees every domain that I look up. The resolver can easily tell
+that I visited Reddit from queries such as:
+
+\begin{itemize}
+  \item \texttt{www.reddit.com}
+  \item \texttt{www.redditstatic.com}
+  \item \texttt{i.redd.it}
+  \item \texttt{preview.redd.it}
+  \item \texttt{styles.redditmedia.com}
+  \item \texttt{matrix.redditspace.com}
+  \item \texttt{w3-reporting-nel.reddit.com} and \texttt{w3-reporting-csp.reddit.com}
+\end{itemize}
+
+Any administrator who operates this resolver, or who can monitor the
+UChicago internal network, can link those names to my client IP and to
+the time of the visit.
+
+If the campus resolver forwards queries to an upstream ISP or another
+provider, that upstream resolver would also see the same domain names
+and could draw the same conclusion.
+
+\subsection*{Authoritative DNS and hosting providers}
+
+Authoritative DNS servers for Reddit and for its infrastructure
+providers also see some information. For example, the trace includes
+queries for Akamai domains such as
+
+\begin{itemize}
+  \item \texttt{a1961.g2.akamai.net}
+  \item \texttt{e6858.dsce9.akamaiedge.net}
+\end{itemize}
+
+These belong to Akamai, which provides Reddit with static assets and media upon some Google search. The authoritative name servers for these domains receive the DNS
+queries and can see that a UChicago address is trying to reach hosts
+that serve Reddit content.
+
+Unlike the campus resolver, they do not see the full set of sites I
+visit, but they do see that I am contacting infrastructure that belongs
+to Reddit.
+
+\section{Other entities that know I visited Reddit}
+
+Even if we ignore the DNS layer, other parties learn about my visit as
+part of normal web operation. I grouped the domains in the trace by
+company, based on the hostnames visible in the DNS packets.
+
+\subsection*{Reddit}
+
+Reddit related domains in the capture include:
+
+\begin{itemize}
+  \item \texttt{www.reddit.com} (main site)
+  \item \texttt{i.redd.it}, \texttt{preview.redd.it} (images and link previews)
+  \item \texttt{www.redditstatic.com}, \texttt{styles.redditmedia.com} (static assets and styles)
+  \item \texttt{gql-realtime.reddit.com}, \texttt{matrix.redditspace.com}
+  \item \texttt{w3-reporting-nel.reddit.com}, \texttt{w3-reporting-csp.reddit.com} (reporting endpoints)
+\end{itemize}
+
+Once the DNS lookup succeeds, my browser opens HTTPS connections to
+these hosts. Reddit therefore knows that someone at a UChicago address
+visited the front page, which APIs were used, and which images and
+scripts were loaded. If I had been logged in, Reddit could tie this to
+my account.
+
+\subsection*{Google}
+
+Several Google owned domains appear in the trace:
+
+\begin{itemize}
+  \item \texttt{safebrowsing.googleapis.com}
+  \item \texttt{www.google.com} and \texttt{accounts.google.com}
+  \item \texttt{encrypted-tbn0.gstatic.com}
+  \item \texttt{optimizationguide-pa.googleapis.com}
+  \item \texttt{clients4.google.com} and other \texttt{googleapis.com} hostnames
+\end{itemize}
+
+Chrome uses Google Safe Browsing to check URLs against a phishing and
+malware list, so contacting \texttt{safebrowsing.googleapis.com} tells
+Google that the browser is checking a new site. Some of the other
+\texttt{googleapis.com} and \texttt{gstatic.com} hostnames serve fonts,
+static files or browser services. If Reddit embeds any Google services
+or if Chrome talks to Google while the page loads, Google can infer that
+the browser just loaded Reddit, even though the page itself is hosted
+elsewhere.
+
+\subsection*{Apple}
+
+The trace includes several Apple hostnames, for example:
+
+\begin{itemize}
+  \item \texttt{captive.g.aaplimg.com}
+  \item \texttt{configuration.ls.apple.com}
+  \item \texttt{swallow-apple.com}, \texttt{fbs.smoot.apple.com},
+        \texttt{smoot-feedback.v.aaplimg.com}
+  \item \texttt{safebrowsing-proxy.g.aaplimg.com}
+\end{itemize}
+
+These are not caused directly by Reddit. They come from macOS itself.
+For instance, \texttt{captive.g.aaplimg.com} is used to detect captive
+portals and to check internet connectivity. Apple therefore learns that
+this Mac is online and periodically making these checks. When combined
+with timing and other signals, Apple could correlate this with general
+browsing activity.
+
+\subsection*{Akamai and other CDNs}
+
+As mentioned above, Akamai appears through domains such as
+\texttt{a1961.g2.akamai.net} and \texttt{e6858.dsce9.akamaiedge.net}.
+These hosts serve static assets for Reddit. When my browser loads
+images, style sheets or JavaScript from Akamai, Akamai sees my IP
+address, the Reddit related hostnames, and the time of access. Even if
+they do not see DNS for \texttt{www.reddit.com} itself, they can still
+see that they are serving Reddit content to a client at UChicago.
+
+\subsection*{Slack and other background services}
+
+There are DNS queries for \texttt{slack.com} as well. These are almost
+certainly from the Slack desktop app running in the background, not from
+Reddit itself. They still show up in the capture because Wireshark is
+recording all DNS traffic on the interface. This illustrates that a DNS
+trace taken on a real machine often contains noise from other
+applications.
+
+\section{Privacy concerns by company}
+
+The privacy risks are different for each of these parties.
+
+\subsection*{UChicago DNS and any upstream ISP}
+
+The campus resolver at \texttt{128.135.249.50} sees every domain that my
+machine looks up, in clear text, along with timestamps and my client IP.
+Over time this data can reveal a very detailed picture of my browsing
+habits and daily routine. Policies at a university are usually more
+benign than at a commercial ISP, but technically the capability is the
+same. Logs could be kept for troubleshooting, but they could also be
+used for monitoring or handed over if requested.
+
+\subsection*{Reddit}
+
+Reddit needs to know which pages I visit, otherwise it cannot serve the
+site. Still, Reddit can log all of my page views, the subreddits I look
+at, my interactions, and my approximate location from IP. If I am
+logged in, this history can be tied to my account and used for
+recommendations, content ranking or targeted advertising. If the logs
+are ever breached or shared, this could reveal a lot about my interests.
+
+\subsection*{Google}
+
+Because Chrome and some page components talk to Google services during
+the visit, Google can often infer that I am on Reddit, even though I am
+not on a Google website. Google already has search history, YouTube
+watch history and other signals. Adding another source of browsing data
+lets Google build a more complete profile that can be used for ads or
+other personalization. The concern here is cross site tracking and the
+concentration of data in one company.
+
+\subsection*{Akamai and other CDNs}
+
+Akamai mainly sees requests for static resources. On its own, this is
+less sensitive than full page content, but Akamai serves a very large
+fraction of the web. If it wanted to, it could correlate traffic from
+the same IP across different customer sites and learn which large
+services someone uses. Even if the company does not do this in practice,
+the potential is there because unencrypted DNS and hostnames in HTTPS
+requests leak quite a bit of information.
+
+\subsection*{Apple}
+
+Apple learns that the device is online and that it is contacting Apple
+network check and feedback services. This is not specific to Reddit, but
+it adds to the general telemetry Apple has about the device. The concern
+is less about this one site, and more about the accumulation of many
+small signals from different services on the system.
+
+\subsection*{Other background services}
+
+Queries from Slack and similar apps are a reminder that DNS captures
+reflect the whole device, not just one browser tab. Any service that
+runs in the background can add entries to the trace and can also be
+logged by the DNS resolver. This widens the amount of information that a
+network operator or DNS provider can collect about a user.
+
+
+\vspace{5mm}
+Overall, the unencrypted DNS trace for a single visit to
+\texttt{reddit.com} exposes not only that I visited Reddit, but also
+which third party services and infrastructure providers were involved,
+and which other applications on my machine were active at the same time.
+
+
+
+
+\section*{Part 2: Encrypted DNS Results}
+
+After switching Chrome to use Cloudflare (1.1.1.1) for secure DNS, the DNS
+traffic in Wireshark changed sharply. In the unencrypted trace, there
+were many DNS packets for Reddit domains and for several third party
+services. In contrast, the encrypted DNS trace contained almost no DNS
+queries from the browser. The only DNS packets that appeared were from
+macOS background services, such as Apple network checks, and a small
+number of CDN related lookups. No Reddit related domain names appeared
+in the capture, as shown: 
+
+\begin{figure} [H]
+    \centering
+    \includegraphics[width=1\linewidth]{encrypted_dns.png}
+    \label{fig:placeholder}
+\end{figure}
+
+\subsection*{Who can still see that I visited Reddit}
+
+Encrypted DNS removes visibility from the campus network and anyone else
+watching local DNS traffic. UChicago’s resolver no longer receives my
+DNS queries, and the domain names are no longer exposed on the wire. 
+
+\textbf{The new party that gains visibility is Cloudflare}, since Chrome now sends
+its DNS lookups directly to Cloudflare over an encrypted connection.
+Cloudflare can see every domain the browser resolves, including all of
+the Reddit related names that were visible to UChicago in the first
+trace.
+
+Other types of entities still see my activity even with encrypted DNS.
+\textbf{Reddit} sees the visit through my HTTPS connections to its servers. Its
+\textbf{CDNs, such as Akamai or Fastly,} still see requests for images, scripts,
+and other static files. These connections reveal that I am loading Reddit
+content even though the DNS lookups do not appear in Wireshark.
+
+\subsection*{Privacy tradeoffs}
+
+Encrypted DNS shifts who can observe my browsing. It prevents the campus
+network, local administrators, and passive observers on the WiFi from
+reading my DNS queries. This removes one of the easiest ways to monitor
+which sites I visit.
+
+However, it does not hide my activity from every party. \textbf{The DNS
+resolver I choose, in this case Cloudflare, now receives all of my
+browser’s DNS traffic.} Cloudflare can build the same type of browsing
+profile that UChicago could build in the unencrypted case, although
+Cloudflare may have different policies about logging and retention.
+
+\textbf{Encrypted DNS also does not hide information from the sites I connect
+to. Reddit still sees my HTTPS requests.} Its CDNs still see that my
+browser is fetching Reddit assets. These services can infer that I am
+visiting Reddit from the hostnames inside the encrypted HTTPS requests.
+
+\textbf{In summary, encrypted DNS protects my traffic from local observers but
+moves trust to the DNS provider and does not prevent the destination
+sites or their CDNs from seeing that I visited them.}
+
+
+
+\end{document}
