@@ -1,0 +1,1232 @@
+\documentclass[9pt,landscape]{article}
+\usepackage[margin=0.35in]{geometry}
+\usepackage{multicol}
+\usepackage{amsmath}
+\usepackage{enumitem}
+\setlength{\columnsep}{10pt}
+\setlength{\parindent}{0pt}
+\setlist{nosep,leftmargin=*}
+
+\begin{document}
+\scriptsize
+\begin{multicols}{3}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsubsection*{Meeting 11: Linear Regression, Basis, Regularization}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\textbf{Supervised learning setup}
+\begin{itemize}
+\item Goal: learn function \(f(x)\) that maps features \(X\) to target \(Y\).
+\item Data: training pairs \((x_i, y_i)\), \(i=1,\dots,n\).
+\item Prediction: \(\hat{y}_i = f(x_i)\) should be close to \(y_i\).
+\item Three sets:
+  \begin{itemize}
+  \item \textbf{Train}: fit parameters (slopes, intercepts, weights).
+  \item \textbf{Validation}: tune hyperparameters (degree, \(\lambda\), etc).
+  \item \textbf{Test}: used once at very end for final evaluation.
+  \end{itemize}
+\end{itemize}
+
+\textbf{Error measurement}
+\begin{itemize}
+\item Point error: \(e_i = \hat{y}_i - y_i\).
+\item Absolute error: \(\sum_i |e_i|\).
+\item Squared error: \(\sum_i e_i^2 = \sum_i (\hat{y}_i - y_i)^2\).
+\item Squared error:
+  \begin{itemize}
+  \item Always nonnegative.
+  \item Differentiable almost everywhere, easier for calculus.
+  \item Large errors get amplified, so model cares more about them.
+  \end{itemize}
+\end{itemize}
+
+\textbf{Least squares linear regression}
+\begin{itemize}
+\item Simple line, one feature:
+  \begin{itemize}
+  \item Model: \(y = mx + b\).
+  \item Loss: \(\text{RSS}(m,b) = \sum_i (y_i - (mx_i + b))^2\).
+  \item Geometric view: vertical distances from points to line.
+  \end{itemize}
+\item Multivariate, \(p\) features:
+  \begin{itemize}
+  \item Data matrix \(X \in \mathbb{R}^{n \times p}\), target \(y \in \mathbb{R}^n\).
+  \item Model: \(\hat{y} = X\beta\), where \(\beta \in \mathbb{R}^p\).
+  \item Often add intercept column of ones.
+  \item Loss: \(\text{RSS}(\beta) = \|y - X\beta\|_2^2\).
+  \end{itemize}
+\item Closed form when \(X^T X\) invertible:
+  \[
+    \hat{\beta} = (X^T X)^{-1} X^T y
+  \]
+\item Scikit-learn uses numerical solvers, but concept stays: minimize RSS.
+\end{itemize}
+
+\textbf{Assumptions / issues}
+\begin{itemize}
+\item Relationship should be roughly linear after any feature transforms.
+\item Features with high linear correlation give nearly singular \(X^T X\).
+\item This inflates variance of \(\hat{\beta}\). Small noise leads to large coefficient swings.
+\item Extreme outliers can dominate fit because of squared error.
+\end{itemize}
+
+\textbf{Network traffic example (bytes vs packets)}
+\begin{itemize}
+\item Task: predict \texttt{bytes} from \texttt{packets} in NetML flow matrix.
+\item Scatter plot shows two clusters:
+  \begin{itemize}
+  \item Data packets: large bytes, variable packet counts.
+  \item ACK packets: very small bytes, lower region.
+  \end{itemize}
+\item Squared error gives big flows more influence:
+  \begin{itemize}
+  \item Errors on large-byte points dominate RSS.
+  \item Regression line fits upper cluster better, lower cluster worse.
+  \end{itemize}
+\item Takeaway: single linear model has trouble with multiple regimes.
+\end{itemize}
+
+\textbf{Fixing ACK artifact}
+\begin{itemize}
+\item Option 1: rescale features or use different loss (less effect here).
+\item Option 2 (better): treat as two-stage pipeline:
+  \begin{itemize}
+  \item Stage 1: classify packet as data vs ACK.
+  \item Stage 2: apply separate linear regression model for each class.
+  \end{itemize}
+\item Lesson: sometimes pipeline of simpler models beats one global model.
+\end{itemize}
+
+\textbf{Polynomial basis expansion}
+\begin{itemize}
+\item Many relationships are nonlinear in raw \(x\), but linear in transformed features.
+\item For one feature \(x\), create basis:
+  \[
+    \phi(x) = [1, x, x^2, x^3, \dots, x^d]
+  \]
+\item Fit linear regression on \(\phi(x)\):
+  \[
+    \hat{y} = \beta_0 + \beta_1 x + \dots + \beta_d x^d
+  \]
+\item Model is still linear in \(\beta\). Nonlinearity is in feature mapping.
+\item Can also include interaction terms, for example \(x_1 x_2\).
+\end{itemize}
+
+\textbf{Overfitting from high degree}
+\begin{itemize}
+\item Degree \(d\) controls flexibility.
+\item As \(d\) increases:
+  \begin{itemize}
+  \item Training error always decreases.
+  \item Beyond a point, validation and test error increase.
+  \end{itemize}
+\item High degree polynomials can oscillate wildly between points.
+\item Classic bias variance tradeoff:
+  \begin{itemize}
+  \item Low degree: high bias, low variance.
+  \item High degree: low bias, high variance.
+  \end{itemize}
+\end{itemize}
+
+\textbf{Choosing polynomial degree (hyperparameter tuning)}
+\begin{itemize}
+\item Never choose degree by looking at test error.
+\item Procedure:
+  \begin{itemize}
+  \item Split training into train and validation sets, or use K fold CV.
+  \item For degrees \(d\) in grid, fit on train, compute error on validation.
+  \item Plot training and validation error vs \(d\).
+  \item Pick degree where validation error is smallest (often near U shaped minimum).
+  \end{itemize}
+\item Same pattern applies to almost all model complexity knobs.
+\end{itemize}
+
+\textbf{Two sources of complexity in linear models}
+\begin{itemize}
+\item Basis design: how many transformed features, degree of polynomials, kernels.
+\item Effective dimension: how many coefficients significantly nonzero.
+\end{itemize}
+
+\textbf{Ridge regression (L2 regularization)}
+\begin{itemize}
+\item Idea: add penalty on large coefficients.
+\item Objective:
+  \[
+    \text{RSS}(\beta) + \lambda \sum_j \beta_j^2
+    = \|y - X\beta\|_2^2 + \lambda \|\beta\|_2^2
+  \]
+\item \(\lambda\) controls strength of regularization (called \texttt{alpha} in sklearn).
+\item \(\lambda = 0\) gives ordinary least squares.
+\item Large \(\lambda\) shrinks coefficients toward zero.
+\item Benefits:
+  \begin{itemize}
+  \item Reduces variance and sensitivity to noise.
+  \item Handles multicollinearity better.
+  \item Often improves test error even if training error worsens.
+  \end{itemize}
+\end{itemize}
+
+\textbf{Lasso (L1) and elastic net}
+\begin{itemize}
+\item Lasso objective:
+  \[
+    \|y - X\beta\|_2^2 + \lambda \sum_j |\beta_j|
+  \]
+\item L1 penalty often produces exact zeros in \(\beta\) (automatic feature selection).
+\item Elastic net:
+  \[
+    \|y - X\beta\|_2^2 + \lambda_1 \sum_j |\beta_j| + \lambda_2 \sum_j \beta_j^2
+  \]
+\item Mixes sparsity from L1 and stability from L2.
+\end{itemize}
+
+\textbf{Tuning \(\lambda\)}
+\begin{itemize}
+\item Hyperparameter like degree.
+\item Use validation or cross validation on \textbf{training data only.}
+\item Often search over log scale, for example \(\lambda \in \{10^{-4},\dots,10^3\}\).
+\item Choose \(\lambda\) that minimizes average validation error.
+\end{itemize}
+
+\textbf{Why not one \(\lambda_j\) per feature}
+\begin{itemize}
+\item Could define:
+  \[
+    \text{RSS} + \sum_j \lambda_j \beta_j^2
+  \]
+\item But:
+  \begin{itemize}
+  \item Hyperparameter space becomes \(d\)-dimensional.
+  \item Search becomes combinatorial and expensive.
+  \item Hard to reason about, no simple regularization path.
+  \end{itemize}
+\item Using one \(\lambda\) encodes ``we care about total number / size of coefficients, not which ones''.
+\end{itemize}
+
+\textbf{Kernel regression example (Google CDN paper)}
+\begin{itemize}
+\item They encode configuration parameters with radial basis functions.
+\item Apply linear regression on expanded feature space.
+\item Real outcome: simple basis expansion plus linear regression can solve production problems.
+\end{itemize}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsubsection*{Meeting 11: Logistic Regression}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\textbf{Model}
+\begin{itemize}
+\item Binary labels \(y \in \{0,1\}\).
+\item Compute linear score \(z = w^T x + b\).
+\item Map to probability:
+  \[
+    p(y=1 \mid x) = \sigma(z) = \frac{1}{1 + e^{-z}}
+  \]
+\item Decision rule: predict class 1 if \(p \ge 0.5\), else class 0.
+\end{itemize}
+
+\textbf{Interpretation}
+\begin{itemize}
+\item Log odds:
+  \[
+    \log \frac{p}{1-p} = w^T x + b
+  \]
+\item Each coefficient \(w_j\) is additive effect of feature \(x_j\) on log odds.
+\item Sign of \(w_j\): positive increases odds of class 1, negative decreases.
+\end{itemize}
+
+\textbf{Training}
+\begin{itemize}
+\item \textbf{Loss}: negative log likelihood = binary cross entropy.
+\item For one point:
+  \[
+    \ell(w) = -[y \log p + (1-y)\log(1-p)]
+  \]
+\item No closed form solution. Use gradient descent or variants.
+\item Loss is convex in \(w\). Global optimum exists, unlike deep nets.
+\end{itemize}
+
+\textbf{When logistic regression works well}
+\begin{itemize}
+\item Data roughly linearly separable in feature space, or after simple basis expansion.
+\item DNS example: classify query vs response based on size, since responses are larger.
+\item Could also classify data vs ACK packets in NetML.
+\end{itemize}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsubsection*{Meeting 12: Trees and Ensembles}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\textbf{Decision trees}
+\begin{itemize}
+\item Partition feature space into axis aligned regions by recursive splits.
+\item Node: test like \(x_j \le t\). Left and right children form subregions.
+\item Leaf: stores prediction.
+\end{itemize}
+
+\textbf{Regression trees}
+\begin{itemize}
+\item At leaf, prediction is mean of training \(y_i\) in that region.
+\item Split selection: choose feature and threshold that minimize RSS across children.
+\end{itemize}
+
+\textbf{Classification trees}
+\begin{itemize}
+\item Leaves store class probabilities.
+\item Need impurity measure at node:
+  \begin{itemize}
+  \item Let \(p_k\) be fraction of class \(k\) in node.
+  \item Misclassification error: \(1 - \max_k p_k\).
+  \item Gini index: \(\sum_k p_k (1-p_k)\).
+  \item Entropy: \(-\sum_k p_k \log p_k\).
+  \end{itemize}
+\item Splits chosen to reduce impurity the most.
+\end{itemize}
+
+\textbf{Tree growth, depth, and pruning}
+\begin{itemize}
+\item Algorithm:
+  \begin{itemize}
+  \item Start with root that has all data.
+  \item At each step, choose best split among all features and thresholds.
+  \item Recurse until stopping rule (max depth, min samples, no gain).
+  \end{itemize}
+\item Greedy: never revisits past splits.
+\item Deep trees can fit noise (each leaf may contain few points).
+\item Cost complexity pruning:
+  \[
+    \text{RSS}_{\text{tree}} + \alpha \times \text{number of leaves}
+  \]
+  or classification version.
+\item Choose \(\alpha\) by cross validation.
+\end{itemize}
+
+\textbf{Pros and cons of single trees}
+\begin{itemize}
+\item Pros:
+  \begin{itemize}
+  \item Very interpretable. Path from root to leaf is human readable rule.
+  \item Work with numeric and categorical features.
+  \item No scaling needed.
+  \end{itemize}
+\item Cons:
+  \begin{itemize}
+  \item High variance, small change in data can change top split.
+  \item Axis aligned boundaries may be too rigid.
+  \item Alone, rarely best accuracy.
+  \end{itemize}
+\end{itemize}
+
+\textbf{Ensembles: idea}
+\begin{itemize}
+\item Combine many weak or unstable models to form stronger one.
+\item Need diversity among models for averaging to help.
+\item For trees, use bagging, random forests, or boosting.
+\end{itemize}
+
+\textbf{Bagging (bootstrap aggregating)}
+\begin{itemize}
+\item For \(B\) times:
+  \begin{itemize}
+  \item Sample \(n\) points with replacement from training data.
+  \item Train a tree on this bootstrap sample.
+  \end{itemize}
+\item Prediction:
+  \begin{itemize}
+  \item Regression: average of tree predictions.
+  \item Classification: majority vote.
+  \end{itemize}
+\item Reduces variance because individual tree errors average out.
+\end{itemize}
+
+\textbf{Random forests}
+\begin{itemize}
+\item Bagging plus feature randomness at each split.
+\item At each node:
+  \begin{itemize}
+  \item Sample subset of features (for example \(\sqrt{d}\) in classification).
+  \item Only search this subset for best split.
+  \end{itemize}
+\item This decorrelates trees:
+  \begin{itemize}
+  \item Without randomness, strong features picked early by all trees.
+  \item With randomness, different trees follow different paths.
+  \end{itemize}
+\item Overall effect: lower variance, better generalization.
+\item Feature importance:
+  \begin{itemize}
+  \item Measure average impurity decrease when splitting on feature across forest.
+  \item Gives ranking of informative features.
+  \end{itemize}
+\end{itemize}
+
+\textbf{Boosting (very brief)}
+\begin{itemize}
+\item Builds trees sequentially, not independently.
+\item Each tree trained on reweighted data that emphasizes previous errors.
+\item Each tree is shallow (stumps or depth few).
+\item Hyperparameters:
+  \begin{itemize}
+  \item Number of trees.
+  \item Learning rate (how much each tree contributes).
+  \item Tree depth.
+  \end{itemize}
+\end{itemize}
+
+\textbf{IoT privacy example (Nest camera)}
+\begin{itemize}
+\item Input: time series of upload rates from camera.
+\item Label: motion vs idle.
+\item Simple threshold on rate works. Trees and forests improve margins, handle noise.
+\item Privacy risk: even encrypted traffic leaks activity patterns via rates.
+\end{itemize}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsubsection*{Meeting 13: Deep Learning Fundamentals}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\textbf{Why deep learning for network data}
+\begin{itemize}
+\item Traditional approach:
+  \begin{itemize}
+  \item Hand craft flow features: counts, average packet size, interarrival times.
+  \item Requires domain expertise and repeated effort for each task.
+  \end{itemize}
+\item Deep learning:
+  \begin{itemize}
+  \item Learns internal representations from raw or lightly processed inputs (for example nPrint).
+  \item Same architecture can be reused for different tasks with new labels.
+  \end{itemize}
+\end{itemize}
+
+\textbf{Artificial neuron}
+\begin{itemize}
+\item Inputs \(x \in \mathbb{R}^d\), weights \(w\), bias \(b\).
+\item Compute pre-activation:
+  \[
+    z = w^T x + b
+  \]
+\item Apply activation:
+  \[
+    a = f(z)
+  \]
+\item Without activation, a stack of layers collapses to one linear map.
+\end{itemize}
+
+\textbf{Activation functions}
+\begin{itemize}
+\item \textbf{Sigmoid}: \(\sigma(z) = 1/(1+e^{-z})\).
+\item \textbf{Tanh}: \(\tanh(z) = (e^z - e^{-z})/(e^z + e^{-z})\).
+\item \textbf{ReLU}: \(\text{ReLU}(z) = \max(0,z)\).
+\item Pros and cons:
+  \begin{itemize}
+  \item Sigmoid, tanh saturate for large \(|z|\), gradients near zero.
+  \item ReLU has simple piecewise linear shape, no saturation on positive side.
+  \item ReLU can suffer from dead neurons for negative region.
+  \end{itemize}
+\end{itemize}
+
+\textbf{Feed forward networks}
+\begin{itemize}
+\item Layers indexed by \(\ell\).
+\item Layer computation:
+  \[
+    a^{(\ell)} = f(W^{(\ell)} a^{(\ell-1)} + b^{(\ell)})
+  \]
+\item Input layer: raw features. Hidden layers: intermediate representations. Output layer: predictions.
+\item Depth: number of layers with parameters. Width: number of units per layer.
+\end{itemize}
+
+\textbf{Loss functions}
+\begin{itemize}
+\item Regression: MSE:
+  \[
+    \frac{1}{n}\sum_i (\hat{y}_i - y_i)^2
+  \]
+\item Binary classification: binary cross entropy.
+\item Multi class: categorical cross entropy with softmax.
+\end{itemize}
+
+\textbf{Training by gradient descent}
+\begin{itemize}
+\item Forward pass: compute outputs and \textbf{loss} for minibatch.
+\item Backward pass:
+  \begin{itemize}
+  \item Use chain rule to compute gradients of loss w.r.t weights and biases.
+  \item Backpropagate errors from output to early layers.
+  \end{itemize}
+\item Update weights:
+  \[
+    \theta \leftarrow \theta - \eta \nabla_\theta L
+  \]
+  where \(\eta\) is learning rate.
+\item Mini batch gradient descent:
+  \begin{itemize}
+  \item Use subset of examples per update (for example 32 or 64).
+  \item Balance between noisy SGD and full batch.
+  \end{itemize}
+\end{itemize}
+
+\textbf{Vanishing and exploding gradients}
+\begin{itemize}
+\item Vanishing:
+  \begin{itemize}
+  \item Gradients shrink as they multiply by derivatives less than 1 across layers.
+  \item Early layers receive tiny updates, learn slowly.
+  \end{itemize}
+\item Exploding:
+  \begin{itemize}
+  \item Gradients blow up and cause unstable training.
+  \end{itemize}
+\item Mitigation:
+  \begin{itemize}
+  \item ReLU and variants.
+  \item Careful initialization.
+  \item Batch normalization.
+  \item Residual (skip) connections.
+  \item Gradient clipping.
+  \end{itemize}
+\end{itemize}
+
+\textbf{Overfitting and regularization in deep nets}
+\begin{itemize}
+\item Networks with many parameters can memorize training data.
+\item Tools:
+  \begin{itemize}
+  \item L2 weight decay.
+  \item Dropout: randomly zero hidden units during training.
+  \item Early stopping based on validation loss.
+  \item Data augmentation (for example in vision).
+  \end{itemize}
+\end{itemize}
+
+\textbf{When deep learning helps vs traditional models}
+\begin{itemize}
+\item Use deep learning when:
+  \begin{itemize}
+  \item Large labeled dataset.
+  \item Complex patterns in high dimensional inputs (for example nPrint bitmaps).
+  \item Manual feature engineering is hard.
+  \end{itemize}
+\item Use simpler models when:
+  \begin{itemize}
+  \item Data small, need interpretability.
+  \item Good hand crafted features exist.
+  \item Limited compute.
+  \item Random forests or logistic regression often enough.
+  \end{itemize}
+\end{itemize}
+
+Key Concepts to Remember
+
+\textbf{Neuron}: Weighted sum + bias + activation function
+Activation functions: Introduce non-linearity (ReLU most common)
+\textbf{Feed-forward network}: Input → hidden layers → output
+\textbf{Forward propagation}: Data flows through network
+\textbf{Backpropagation}: Gradients flow backward to update weights
+\textbf{Gradient descent:} Iterative weight updates to minimize loss
+\textbf{Epochs}: Full passes through training data
+Vanishing/exploding gradients: Major training challenges
+\textbf{Representation learning}: Networks learn features automatically
+\textbf{Deep learning advantage}: No manual feature engineering needed
+
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsubsection*{Meeting 14: nPrint and Representation Learning}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\textbf{Motivation}
+\begin{itemize}
+\item Each network ML project often reimplements:
+  \begin{itemize}
+  \item Feature extraction code.
+  \item Flow definitions and filtering.
+  \item Formats for storing features.
+  \end{itemize}
+\item This makes results hard to reproduce and compare across papers.
+\end{itemize}
+
+\textbf{nPrint representation}
+\begin{itemize}
+\item Input: raw packet capture (pcap).
+\item Output: CSV with one row per packet, many columns representing bits. (Fixed-size bitmap where each bit always means the same thing. Solves the alignment problem)
+\item Bit positions fixed:
+  \begin{itemize}
+  \item Certain ranges reserved for IPv4 header.
+  \item Others for IPv6, TCP, UDP, payload slices, etc.
+  \end{itemize}
+\item Values:
+  \begin{itemize}
+  \item 1: bit set.
+  \item 0: bit clear.
+  \item \(-1\): field not present at all in this packet.
+  \end{itemize}
+\item \(-1\) is critical to keep alignment when field absent (for example no TCP header).
+\end{itemize}
+
+\textbf{Typical usage}
+\begin{itemize}
+\item Example commands:
+\begin{verbatim}
+# Generate nPrint with first 30 bytes of payload
+nprint -P 30 input.pcap > out.csv
+# Include IPv4 and TCP headers with payload
+nprint -P 30 -4 -t input.pcap > out.csv
+\end{verbatim}
+\item Steps:
+  \begin{itemize}
+  \item Generate nPrint CSVs.
+  \item Create label file for classification (for example scan vs benign).
+  \item Join in pandas.
+  \item Train classifier (random forest, deep net).
+  \item Inspect feature importance or learned representations. (which bits/header fields matter))
+  \end{itemize}
+\end{itemize}
+
+\textbf{Output}: 
+
+CSV file where each row = one packet
+
+
+Each column = one bit position in standardized representation
+
+
+Typically hundreds of features (bits) per packet, can load directly into pandas DataFrame
+
+
+
+\textbf{Benefits}
+\begin{itemize}
+\item Unified representation across tasks. (Don't need to redesign feature extraction)
+\item Easier reproducibility: same pcap and flags produce identical CSV.
+\item Automation: Deep learning can learn which bits matter without manual feature design.
+\end{itemize}
+
+\textbf{Spurious correlations}
+- nPrint includes all header fields indiscriminately
+
+
+- Models may latch onto patterns that don't generalize
+
+
+Example: All training examples from one IP address range
+Model might learn to recognize IP range instead of application behavior (IP instead of attack behavior 
+
+
+- Requires careful data collection, cross-validation, feature importance analysis
+
+\textbf{Limitations}
+\begin{itemize}
+\item Very high dimensional and dense. Storage and compute heavy.
+\item Represents each packet independently. No inherent sequence or timing encoding.
+\item For tasks that depend on ordering (for example TCP handshake), must group packets or use sequence models.
+\end{itemize}
+
+
+\textbf{Hands-On Activity: nPrint for Scan Detection
+}
+\textbf{Part 1: Generate nPrints
+}
+Install nPrint tool (compile from source)
+Process pcap files to generate bitmap representations
+Takes ~5-10 minutes to get building properly
+\textbf{Part 2: Train Classifier
+}
+Load nPrint CSV into DataFrame
+Generate labels (scan vs. benign)
+Train random forest or other classifier
+Typically random forest works well
+\textbf{Part 3: Analyze Feature Importance
+}
+Examine which bit positions (header fields) were most important
+Interpret what those bits represent in protocol headers
+Ask: Does this make sense for the task?
+\textbf{Part 4: Experiment with Different Representations
+}
+Try different nPrint flags (-4, -6, -t, etc.)
+Compare performance with different header combinations
+Understand which headers contain most informative features
+
+\vspace{2mm}
+
+\textbf{Key Takeaways
+}
+nPrint enables representation learning for network traffic
+Automates feature engineering but doesn't eliminate need for domain knowledge
+Provides reproducibility and standardization benefits
+Large representation size and potential spurious correlations are concerns
+Feature importance analysis remains critical
+Hybrid approaches with AI-assisted engineering may be future direction
+Not a silver bullet, but valuable tool in network ML toolkit
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsubsection*{Meeting 15: Dimensionality Reduction and Autoencoders}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\textbf{Unsupervised learning}
+\begin{itemize}
+\item Train without using labels as part of objective. (Labels = ground-truth outputs provided during training. Cat/dog)
+\item Still can evaluate results with labels afterward.
+\item Here focus on dimensionality reduction and clustering.
+\end{itemize}
+
+\textbf{Dimensionality reduction goals}
+\begin{itemize}
+\item Goal: Represent high-dimensional data with smaller number of dimensions
+\item Compress features while keeping structure.
+\item Help visualization in 2D or 3D.
+\item Reduce noise and remove redundant dimensions.
+\item Prepare inputs for clustering or classifiers.
+\end{itemize}
+
+\textbf{PCA: principal component analysis}
+
+Goal: Represent high-dimensional data with smaller number of dimensions (Change of basis - representing data as linear combination of different features. Assumes linear relationships in data
+. Find most important features/directions for describing data points)
+
+
+\begin{itemize}
+    \item \textbf{Principal Component Analysis (PCA)}
+    \begin{itemize}
+        \item \textbf{Core Concept:}
+        \begin{itemize}
+            \item Change of basis -- representing data as a linear combination of different features
+            \item Assumes linear relationships in data
+            \item Finds most important features/directions for describing data points
+        \end{itemize}
+
+        \item \textbf{Mathematical Intuition:}
+        \begin{itemize}
+            \item Two ways to view it:
+            \begin{enumerate}
+                \item \textbf{Maximum variance}: Find direction that captures the most variance in the data.
+                \item \textbf{Minimum projection distance}: Minimize distance when projecting points onto a lower-dimensional space.
+            \end{enumerate}
+            \item These are equivalent approaches.
+        \end{itemize}
+
+        \item \textbf{Principal Components:}
+        \begin{itemize}
+            \item First PC: Direction of maximum variance (PCA finds the orientation where the data looks the most stretched out, because that direction contains the most information (variance).
+            \item Second PC: Orthogonal to first, captures remaining variance
+            \item Size of components (eigenvalues) indicates variance in each direction
+        \end{itemize}
+
+        \item \textbf{Choosing Number of Components:}
+        \begin{itemize}
+            \item \textbf{Scree plot}: Plot variance explained vs. number of components
+            \item Look for the ``elbow'' or ``knee'' in the curve
+            \item Consider domain knowledge (e.g., if looking for 2 classes, try 2 components)
+            \item Explained variance: How much of total variance is captured by $N$ components
+        \end{itemize}
+
+        \item \textbf{Spectral Clustering with PCA:}
+        \begin{itemize}
+            \item PCA can be used for clustering
+            \item Each point has components in PC1, PC2, etc.
+            \item Points with more of PC1 $\rightarrow$ cluster 1; more of PC2 $\rightarrow$ cluster 2
+            \item Number of PCs chosen = number of clusters
+        \end{itemize}
+
+        \item \textbf{Extensions:}
+        \begin{itemize}
+            \item Kernel PCA: Handles non-linear relationships
+            \item Apply functions to PCA to express non-linear patterns
+        \end{itemize}
+    \end{itemize}
+\end{itemize}
+
+
+
+
+%%%%%%%%%%%% 
+
+\begin{itemize}
+\item Input: centered data matrix \(X \in \mathbb{R}^{n\times d}\).
+\item Covariance:
+  \[
+    S = \frac{1}{n} X^T X
+  \]
+\item Eigen decomposition of \(S\):
+  \begin{itemize}
+  \item Eigenvectors give principal directions.
+  \item Eigenvalues give variance along each direction.
+  \end{itemize}
+\item Two equivalent views:
+  \begin{itemize}
+  \item Directions of maximum variance.
+  \item Best low-rank linear approximation in least squares sense.
+  \end{itemize}
+\item Projection onto top \(k\) PCs gives reduced representation.
+\item Scree plot: cumulative variance vs number of components.
+\end{itemize}
+
+\textbf{PCA for clustering and visualization}
+\begin{itemize}
+\item Plot first two PCs to see approximate class separation.
+\item Use top \(k\) PCs as input to clustering algorithms (for example K means).
+\end{itemize}
+
+\textbf{t-SNE}
+\begin{itemize}
+\item Nonlinear dimensionality reduction that preserves local neighbor structure.
+\item Constructs probability distributions over pairs of points in high and low dimensional spaces.
+\item Optimizes mapping so neighbors in high dimensional space remain neighbors in 2D or 3D.
+\item Great for visualizing clusters. Distances between clusters not always meaningful.
+\end{itemize}
+
+\begin{itemize}
+    \item \textbf{Autoencoders}
+    \begin{itemize}
+
+        \item \textbf{Architecture:}
+        \begin{itemize}
+            \item Deep neural network with encoder and decoder
+            \item Encoder: Reduces dimensionality (drops coefficients)
+            \item Bottleneck: Compressed representation (reduced dimensionality)
+            \item Decoder: Attempts to reconstruct original input
+        \end{itemize}
+
+        \item \textbf{Training Process:}
+        \begin{itemize}
+            \item Goal: Make output match input as closely as possible
+            \item If decoder can reconstruct from bottleneck, encoder did a good job
+            \item Decoder is mainly for training the encoder
+        \end{itemize}
+
+        \item \textbf{Advantages over PCA / t-SNE:}
+        \begin{itemize}
+            \item No need to think about feature engineering
+            \item Can work directly with raw data
+            \item Similar to deep learning vs.\ random forests in supervised learning
+        \end{itemize}
+
+        \item \textbf{Disadvantages:}
+        \begin{itemize}
+            \item Much more computationally expensive
+            \item Requires more data and training time
+        \end{itemize}
+
+        \item \textbf{Applications:}
+        \begin{itemize}
+            \item Same as PCA / t-SNE (visualization, compression, preprocessing)
+        \end{itemize}
+
+    \end{itemize}
+\end{itemize}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsubsection*{Meeting 16: Generative AI and Diffusion Models}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+Synthetic (data that is generated by a machine, not collected from the real world): packets created by a generative model that imitate real traffic.
+
+\textbf{Motivation for synthetic network traffic}
+\begin{itemize}
+\item Real traces:
+  \begin{itemize}
+  \item Reveal topology, internal IPs, routing policies, user behavior.
+  \item Hard to release publicly for privacy and security reasons.
+  \end{itemize}
+\item Synthetic traffic can:
+  \begin{itemize}
+    \item Training machine learning models with insufficient real data
+    \item Augmenting datasets (e.g., scaling 100 traces to 10,000)
+    \item Testing hardware/software, protocol interoperability; Privacy-preserving data sharing
+  \end{itemize}
+\end{itemize}
+
+\textbf{Earlier approaches}
+\begin{itemize}
+\item Simulators: replay or approximate traffic patterns. (Limited utility in ML:  copies don't add variation needed for model robustness) 
+\item GAN-based generators:
+  \begin{itemize}
+  \item Generator produces samples, discriminator judges real vs fake. (Generate realistic variations of network traffic) 
+  \item Often operate at flow level (aggregate features like counts, bytes).
+  \item Limited when you need packet-level detail. 
+  \end{itemize}
+\item Problems:
+  \begin{itemize}
+  \item ML models trained on synthetic then tested on real often perform poorly.
+  \item Protocol violations, unrealistic patterns.
+  \end{itemize}
+\end{itemize}
+
+\textbf{Diffusion model basics}
+\begin{itemize}
+\item Forward process:
+  \begin{itemize}
+  \item Gradually add Gaussian noise over \(T\) steps to data.
+  \item Final distribution approaches isotropic Gaussian.
+  \end{itemize}
+\item Reverse process:
+  \begin{itemize}
+  \item Learn model that, at each step, predicts noise component.
+  \item Use this to denoise from step \(T\) back to step 0.
+  \end{itemize}
+\item Sampling:
+  \begin{itemize}
+  \item Start from random noise.
+  \item Apply reverse steps to generate sample.
+  \end{itemize}
+\item Advantages over GANs:
+  \begin{itemize}
+  \item Training more stable.
+  \item Less mode collapse.
+  \item Key point for exam: Diffusion = denoising process, GAN = one-shot generation.
+  \end{itemize}
+\end{itemize}
+
+\textbf{4. Conditional Generation (Control Over Outputs)}
+
+Diffusion models can be guided using:
+\begin{itemize}
+    \item \textbf{Text prompts} (via CLIP embeddings)
+    \item \textbf{ControlNet} (extra structure constraints)
+\end{itemize}
+
+\textbf{Why this matters for networking}
+
+Network traffic has \textbf{strict structure}:
+\begin{itemize}
+    \item IP header must appear before TCP header.
+    \item TCP handshake must obey ordering.
+\end{itemize}
+
+Diffusion will violate these rules unless constrained.
+
+\textbf{ControlNet} forces diffusion to respect structure (similar to guiding a sketch $\rightarrow$ image).
+
+\vspace{2mm}
+
+\textbf{NetDiffusion style pipeline}
+
+
+\textbf{Step 1: Convert traffic to images}
+
+\begin{itemize}
+    \item Each packet becomes a row in a 2D bitmap.
+    \item Bits represent header fields (similar to nPrint but larger).
+    \item Missing fields become \textbf{--1} (necessary for alignment).
+    \item Up to 1024 packets per image.
+\end{itemize}
+
+\textbf{Why:} Diffusion models expect image-like inputs.
+
+\vspace{6pt}
+
+
+\textbf{Step 2: Fine-Tune Stable Diffusion with LoRA}
+
+\begin{itemize}
+    \item Use pre-trained Stable Diffusion 1.5.
+    \item LoRA = low-rank adapters enabling quick fine-tuning.
+    \item Pair traffic-images with text prompts like ``TCP Amazon traffic''.
+\end{itemize}
+
+\textbf{Benefit:} Few training samples needed (few-shot learning).
+
+\vspace{6pt}
+
+
+\textbf{Step 3: ControlNet for Structure}
+
+Diffusion alone generates invalid packets.  
+ControlNet enforces:
+
+\begin{itemize}
+    \item Correct header ordering.
+    \item Packet field boundaries.
+\end{itemize}
+
+\textbf{Similar to:} Using an edge map to constrain a generated image.
+
+\vspace{6pt}
+
+
+\textbf{Step 4: Post-Processing with Dependency Trees}
+
+Even after ControlNet, outputs may violate protocol rules.  
+A dependency tree ensures correctness:
+
+\textbf{Intra-packet fixes:}
+\begin{itemize}
+    \item Checksums
+    \item Header field consistency
+\end{itemize}
+
+\textbf{Inter-packet fixes:}
+\begin{itemize}
+    \item TCP handshake ordering
+    \item Sequence number progression
+    \item Source/dest IP consistency
+\end{itemize}
+
+\textbf{Goal:} Make minimal edits to produce valid PCAP.
+
+\vspace{2mm}
+
+
+\textbf{6. Evaluation (Key Results)}
+
+\textbf{Statistical Similarity}
+\begin{itemize}
+    \item 30 percent improvement vs.\ NetShare in matching real traffic distributions.
+    \item 70 percent improvement in field-level accuracy.
+\end{itemize}
+
+\textbf{ML Classification Accuracy}
+
+Training models entirely on synthetic $\rightarrow$ testing on real:
+\begin{itemize}
+    \item 60 percent improvement vs.\ baselines.
+\end{itemize}
+
+\textbf{Why:} Packet-level details carry more distinguishable patterns than flow-level data.
+
+\textbf{Class imbalance handling}
+\begin{itemize}
+    \item Rare classes (Facebook, Zoom, ``play music'' from A3) can be synthetically expanded.
+\end{itemize}
+
+\textbf{Tool compatibility}
+\begin{itemize}
+    \item Wireshark parses generated PCAPs.
+    \item TCPreplay runs them with no complaints.
+\end{itemize}
+
+Some fields (TCP flags) still imperfect—research ongoing.
+
+\vspace{10pt}
+
+\textbf{7. Fidelity vs Diversity Trade-off (Important Concept)}
+
+Goal: Generated traffic should be:
+\begin{itemize}
+    \item \textbf{Similar enough} to real traffic (fidelity)
+    \item \textbf{Different enough} to add new information (diversity)
+\end{itemize}
+
+Two extremes:
+\begin{itemize}
+    \item \textbf{Too close} $\rightarrow$ just copies real packets, useless for ML.
+    \item \textbf{Too different} $\rightarrow$ meaningless noise, breaks protocol patterns.
+\end{itemize}
+
+There is no universally accepted metric to measure this balance.
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\textbf{Key exam-level concepts across meetings 11--17}
+\begin{itemize}
+\item Linear vs logistic regression, and how squared loss vs cross entropy works.
+\item Overfitting, bias variance tradeoff, and hyperparameter tuning with validation.
+\item Trees, bagging, random forests, and why ensembling reduces variance.
+\item Pros and cons of deep learning vs traditional models on traffic tasks.
+\item nPrint's role in representation learning and reproducibility.
+\item PCA, t-SNE, autoencoders for dimensionality reduction.
+\item High-level understanding of diffusion based generative traffic models.
+\end{itemize}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+\subsection*{Exams}
+
+\textbf{Linear Regression Accuracy}
+\begin{itemize}
+    \item LR does \emph{not} require a strictly linear true relationship.
+    \item Works fine if relationship is approximately linear or after basis expansion.
+    \item So the statement is \textbf{No}.
+\end{itemize}
+
+\textbf{Deep Learning vs. Random Forest (Network Tasks)}
+\begin{itemize}
+    \item DL often not better because:
+    \begin{itemize}
+        \item Network features already meaningful → RF separates classes well.
+        \item DL can overfit small or tabular datasets.
+        \item RF handles nonlinear splits naturally; no scaling needed.
+        \item DL complexity unnecessary when features already encode semantics.
+    \end{itemize}
+\end{itemize}
+
+\textbf{PCA: Choosing Number of Components ($k$)}
+\begin{itemize}
+    \item Use a \textbf{scree plot}: variance explained per component.
+    \item Choose $k$ at the \textbf{elbow} where added components give diminishing returns.
+\end{itemize}
+
+\textbf{Dimensionality Reduction (PCA)}
+• Helps visualize high-dim data in 2–3 dims.  
+• Reduces model complexity + noise.  
+• Networking use case: anomaly detection or understanding structure in traffic. (PCA can reveal clusters: PC1/PC2 show directions of largest variance.  
+Points separated along PCs may indicate different groups. 
+Anomalies often appear as outliers on one PC (e.g., unusually large PC2 value).)
+
+
+\textbf{K-means vs density clustering:}  
+K-means assumes spherical clusters and fails on non-linear shapes.  
+Example: donut-shaped cluster with a small cluster inside.  
+K-means splits the donut incorrectly; DBSCAN finds both clusters because it groups points by density, not distance to a center.
+
+\textbf{nPrint Advantages:}
+\begin{itemize}
+\item No manual feature engineering required; packets converted to aligned bit vectors.
+\item Standardized representation makes experiments reproducible across datasets.
+\end{itemize}
+
+\textbf{nPrint Limitations:}
+\begin{itemize}
+\item Cannot represent temporal features (interarrival time, ordering, flow dynamics).
+\item Packet size represented inefficiently due to fixed-width bit padding.
+\end{itemize}
+
+\textbf{Spurious Correlations in nPrint:}
+\begin{itemize}
+\item nPrint encodes all header bits, including non-semantic fields. (true in dataset, but not true in general)
+\item Models may learn dataset-specific artifacts (e.g., TTL values tied to topology).
+\item Learned feature may not generalize; model is distinguishing environments, not traffic behavior.
+\end{itemize}
+
+\textbf{Variable-Length Flow Features}
+\begin{itemize}
+\item Flow features like interarrival times or packet-size sequences differ in length because flows have different numbers of packets.
+\item ML models require fixed-size feature vectors; variable-length sequences cannot be stacked into one matrix.
+\item NetML normalizes lengths by padding shorter sequences with zeros (and truncating long ones) so all flows have same number of rows.
+\end{itemize}
+
+\textbf{Overfitting Feature Example}
+\begin{itemize}
+\item Spurious features like source IP range, TTL values, or dataset-specific ports can cause overfitting.
+\item These features correlate with labels in the training environment but do not generalize to new networks.
+\item Model memorizes artifacts of the dataset → fails on test data.
+\end{itemize}
+
+\textbf{Random Forest Feature Types}
+RFs can handle mixed feature types (numeric + categorical) because tree splits
+naturally operate on thresholds or category equality. No special preprocessing
+needed.
+
+\textbf{Deep Learning vs Simpler Models}
+\begin{itemize}
+\item DL does not always outperform RF/kNN/logistic models.
+\item DL needs large datasets; many networking datasets are small → overfitting.
+\item Semantic features (flow duration, sizes, rates) often capture signal well.
+\item nPrint is extremely high dimensional; simpler models may generalize better.
+\end{itemize}
+
+\textbf{Unsupervised Learning Applications}
+\begin{itemize}
+\item Detect anomalies (unusual traffic volumes/destinations)
+\item Detect changes that may indicate failures
+\item Cluster traffic traces into groups (e.g., botnet detection)
+\item Not used for identifying applications (requires labels)
+\end{itemize}
+
+\textbf{Evaluating Unsupervised Models}
+\begin{itemize}
+\item Training uses no labels, but evaluation can use labels if available.
+\item After clustering, match clusters to true classes.
+\item Then compute precision, recall, F1, purity, etc.
+\item Cannot use precision/recall to guide the unsupervised training process.
+\end{itemize}
+
+\textbf{When Transformers outperform nPrint + simple models}
+\begin{itemize}
+\item nPrint no temporal order; simple classifiers see packets independently.
+\item Transformers learn long-range sequences and protocol semantics.
+\item Examples: Detecting DNS lookup followed by TCP connection (multi-step behavior). Multi-stage attacks (scan → exploit → exfiltration). Web/app behavior classification requiring sequence patterns
+\end{itemize}
+
+\textbf{Linear Regression} → models straight-line (first-degree linear) relationships.
+\textbf{Logistic Regression} → used for classification; predicts probabilities for discrete outcomes.
+\textbf{Random Forest advantage} → reduced overfitting due to many averaged trees.
+\textbf{Random Forest randomness} → (1) bootstrap sampling (Each tree trains on a random sample of the data (sampling with replacement), (2) random subset of features at each split.
+Best visualization technique → t-SNE (preserves local structure, great for 2D/3D plots).
+\textbf{Dimensionality reduction} improves robustness by:
+• Removing noisy/irrelevant features
+• Reducing overfitting
+• Forcing model to learn main structure (e.g., PCA components)
+
+\textbf{DBSCAN} → density-based clustering; finds arbitrary shapes + detects outliers.
+
+\textbf{K-means} → does NOT always give same clusters (depends on random initialization).
+
+\textbf{Valid dendrogram clusters} → must be complete subtrees. Take any merge point (a horizontal bar) in the dendrogram. If you “cut” the tree right at that bar, everything hanging under that cut is a subtree → and that leaf set is a valid cluster.
+
+\textbf{Generative models for QoE} → create \textbf{synthetic traffic} to increase data diversity, expands rare cases, fix class imbalance, reduce overfitting, and improve generalization to new network conditions.
+
+
+\vspace{2mm}
+\textbf{\textit{Generated}}
+
+\textbf{Linear Regression and Regularization:} 
+Polynomial expansion lets linear models fit non linear patterns; 
+higher degree polynomials increase overfitting; 
+expansion creates extra feature columns; 
+Ridge uses L2 penalty to shrink weights; 
+L2 reduces reliance on many features.
+
+\textbf{Decision Trees and Random Forests:} 
+Random forests use bootstrap sampling; 
+random feature selection at splits; 
+trees best for interpretability; 
+feature importance helps debugging and feature selection.
+
+\textbf{Neural Networks and Deep Learning:} 
+ReLU avoids saturation and helps gradients; 
+ReLU is efficient; 
+ReLU gives sparse activations; 
+sigmoid and tanh cause vanishing gradients; 
+deep learning does not always outperform simpler models when semantic features already separate classes.
+
+\textbf{nPrint Representation Learning:} 
+In nPrint, 1 means bit present; 0 means bit absent; -1 means header field not present; 
+-1 keeps bit positions consistent; 
+benefits include reproducibility, removal of spurious correlations, deep learning compatibility, standardized representation.
+
+\textbf{Dimensionality Reduction:} 
+t-SNE captures non linear structure; 
+autoencoders learn features directly from raw data and capture non linear patterns.
+
+\textbf{Diffusion Models and Synthetic Traffic:} 
+Use cases include limited labels, privacy preserving sharing, class imbalance; 
+fidelity measures similarity; 
+diversity measures variation; 
+balance between both is needed.
+
+\textbf{Supervised Learning Basics:} 
+Linear regression fits first degree linear relationships; 
+logistic regression predicts probabilities; 
+random forests reduce overfitting; 
+random forests add randomness via bootstrap sampling and random feature subsets.
+
+\textbf{Unsupervised Learning Basics:} 
+t-SNE is best for visualization; 
+dimensionality reduction improves robustness by removing noise and reducing complexity.
+
+\textbf{Unsupervised Learning Applications:} 
+Detect unusual volumes; 
+detect changes signaling failures; 
+cluster traces into behavior groups.
+
+\textbf{Evaluation of Unsupervised Models:} 
+Precision and recall can be used when labels exist for evaluation.
+
+\textbf{Density Based Clustering:} 
+Better than k means for non spherical clusters; 
+handles varying density; 
+detects outliers and nested clusters.
+
+\textbf{Transformers for Network Tasks:} 
+Useful when relationships span multiple flows; 
+capture long range temporal and semantic context.
+
+
+\end{multicols}
+\end{document}
