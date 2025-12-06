@@ -1,0 +1,19 @@
+# Ignore everything under data/
+data/**
+
+# Allow nd_data/ folder itself
+!data/nd_data/
+
+# Allow real_traffic_images folder
+!data/nd_data/real_traffic_images/
+!data/nd_data/real_traffic_images/**
+
+!data/nd_data/student_converted_images/
+!data/nd_data/student_converted_images/**
+
+!data/nd_data/color_corrected_generated_traffic_images/
+!data/nd_data/color_corrected_generated_traffic_images/**
+
+
+!data/nd_data/generated_nprint/
+!data/nd_data/generated_nprint/**
